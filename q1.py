@@ -41,3 +41,88 @@ print(df.dtypes)
 
 print("\nFinal shape:")
 print(df.shape)
+
+
+print("Shape:", df.shape)
+print("\nMissing values:")
+print(df.isnull().sum().sum())
+print("\nData types:")
+print(df.dtypes)
+
+df["TenureGroup"] = pd.cut(
+    df["tenure"],
+    bins=[-1, 12, 24, 48, 72],
+    labels=["New", "Early", "Established", "Loyal"]
+)
+
+print("\nTenure Groups:")
+print(df["TenureGroup"].value_counts())
+
+
+print(
+    pd.crosstab(
+        df["TenureGroup"],
+        df["Churn"],
+        normalize="index"
+    ) * 100
+)
+
+
+service_columns = [
+    "OnlineSecurity",
+    "OnlineBackup",
+    "DeviceProtection",
+    "TechSupport",
+    "StreamingTV",
+    "StreamingMovies"
+]
+
+df["ServiceCount"] = (
+    df[service_columns] == "Yes"
+).sum(axis=1)
+
+print("\nService Count:")
+print(df["ServiceCount"].value_counts().sort_index())
+
+
+print("\nService Count Statistics:")
+print(df["ServiceCount"].describe())
+
+
+print(
+    pd.crosstab(
+        df["ServiceCount"],
+        df["Churn"],
+        normalize="index"
+    ) * 100
+)
+
+
+
+print("\nFeature Review:")
+print(
+    df[
+        [
+            "tenure",
+            "TenureGroup",
+            "ServiceCount",
+            "Churn"
+        ]
+    ].head(10)
+)
+
+
+
+print("\nNew Feature Missing Values:")
+print(
+    df[
+        [
+            "TenureGroup",
+            "ServiceCount"
+        ]
+    ].isnull().sum()
+)
+
+
+
+
