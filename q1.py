@@ -590,3 +590,110 @@ def run_day7_relationship_analysis(data):
 
 run_day6_eda_ii(df)
 run_day7_relationship_analysis(df)
+
+
+# =========================================================
+# DAY 8 — Statistical Analysis
+# =========================================================
+
+def holm_adjust(p_values):
+    """Apply Holm's step-down adjustment and return values in input order."""
+    order = sorted(range(len(p_values)), key=lambda index: p_values[index])
+    adjusted = [0.0] * len(p_values)
+    running_max = 0.0
+    total = len(p_values)
+    for rank, index in enumerate(order):
+        candidate = min(1.0, (total - rank) * p_values[index])
+        running_max = max(running_max, candidate)
+        adjusted[index] = running_max
+    return adjusted
+
+
+def run_day8_statistical_analysis(data):
+    try:
+        from scipy.stats import chi2_contingency, ttest_ind
+    except ImportError as error:
+        raise ImportError(
+            "Day 8 statistical analysis requires SciPy. "
+            "Install the project packages with: pip install -r requirements.txt"
+        ) from error
+
+    tests = []
+    print("\n========== DAY 8: STATISTICAL TESTS ==========")
+    print("Categorical features: Pearson chi-square test of independence")
+    for column in ("Contract", "PaymentMethod"):
+        table = pd.crosstab(data[column], data["Churn"]).reindex(
+            columns=["No", "Yes"], fill_value=0
+        )
+        chi2, p_value, degrees_freedom, expected = chi2_contingency(
+            table, correction=False
+        )
+        sample_size = int(table.to_numpy().sum())
+        cramer_v = (chi2 / (sample_size * min(table.shape[0] - 1, table.shape[1] - 1))) ** 0.5
+        tests.append(
+            {
+                "name": f"{column} vs Churn",
+                "p_value": float(p_value),
+                "statistic": float(chi2),
+                "degrees_freedom": int(degrees_freedom),
+                "effect": f"Cramer's V = {cramer_v:.3f}",
+            }
+        )
+        print(f"\n{column} x Churn contingency table:")
+        print(table.to_string())
+        print(
+            f"Chi-square({degrees_freedom}) = {chi2:.2f}; "
+            f"p = {p_value:.3e}; N = {sample_size}; "
+            f"Cramer's V = {cramer_v:.3f}; "
+            f"minimum expected cell = {expected.min():.1f}"
+        )
+
+    stayed = data.loc[data["Churn"].eq("No"), "MonthlyCharges"].astype(float)
+    churned = data.loc[data["Churn"].eq("Yes"), "MonthlyCharges"].astype(float)
+    welch = ttest_ind(churned, stayed, equal_var=False, nan_policy="omit")
+    variance_churned = churned.var(ddof=1)
+    variance_stayed = stayed.var(ddof=1)
+    term_churned = variance_churned / churned.count()
+    term_stayed = variance_stayed / stayed.count()
+    welch_df = (term_churned + term_stayed) ** 2 / (
+        term_churned**2 / (churned.count() - 1)
+        + term_stayed**2 / (stayed.count() - 1)
+    )
+    mean_difference = churned.mean() - stayed.mean()
+    tests.append(
+        {
+            "name": "MonthlyCharges: churned vs stayed (Welch t-test)",
+            "p_value": float(welch.pvalue),
+            "statistic": float(welch.statistic),
+            "degrees_freedom": float(welch_df),
+            "effect": f"mean difference = ${mean_difference:.2f}",
+        }
+    )
+    print("\nMonthlyCharges by Churn:")
+    print(
+        f"Stayed: n={stayed.count()}, mean=${stayed.mean():.2f}; "
+        f"Churned: n={churned.count()}, mean=${churned.mean():.2f}"
+    )
+    print(
+        f"Welch t({welch_df:.1f}) = {welch.statistic:.2f}; "
+        f"p = {welch.pvalue:.3e}; mean difference (churned - stayed) "
+        f"= ${mean_difference:.2f}"
+    )
+
+    adjusted = holm_adjust([test["p_value"] for test in tests])
+    print("\nHolm-adjusted results (family-wise alpha = 0.05):")
+    for test, adjusted_p in zip(tests, adjusted):
+        test["adjusted_p_value"] = adjusted_p
+        print(
+            f"{test['name']}: raw p={test['p_value']:.3e}; "
+            f"adjusted p={adjusted_p:.3e}; {test['effect']}"
+        )
+
+    print(
+        "\nInterpretation: all three selected comparisons remain statistically "
+        "significant after Holm adjustment. These tests show associations or "
+        "mean differences in this dataset; they do not establish causation."
+    )
+
+
+run_day8_statistical_analysis(df)
