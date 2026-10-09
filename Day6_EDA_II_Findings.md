@@ -48,7 +48,7 @@ Paperless billing is associated with **33.57%** churn, compared with **16.33%** 
 
 ## Reproducible outputs
 
-Run `python Day6_EDA_II.py` from this folder to print the verification and group summaries and create two chart files:
+Run `python q1.py` from this folder to run the earlier EDA I analysis followed by Day 6 EDA II, print the verification and group summaries, and create two chart files:
 
 - `Day6_EDA_II_Charts.png`
 - `Day6_EDA_II_Service_Churn_Rates.png`
