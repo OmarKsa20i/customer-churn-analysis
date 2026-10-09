@@ -442,4 +442,151 @@ def run_day6_eda_ii(data):
     print(f"\nCharts saved to:\n- {charges_chart.name}\n- {services_chart.name}")
 
 
+
+# =========================================================
+# DAY 7 — Relationship Analysis
+# =========================================================
+
+CONTRACT_ORDER = ["Month-to-month", "One year", "Two year"]
+TENURE_GROUP_ORDER = [
+    "New (0-12)",
+    "Early (13-24)",
+    "Established (25-48)",
+    "Loyal (49-72)",
+]
+PAYMENT_ORDER = [
+    "Electronic check",
+    "Mailed check",
+    "Bank transfer (automatic)",
+    "Credit card (automatic)",
+]
+
+
+def run_day7_relationship_analysis(data):
+    data["TenureGroup"] = pd.cut(
+        data["tenure"],
+        bins=[-1, 12, 24, 48, 72],
+        labels=TENURE_GROUP_ORDER,
+        include_lowest=True,
+    )
+
+    contract_tenure = data.groupby(
+        ["Contract", "TenureGroup"], observed=True
+    ).agg(
+        customers=("Churn", "size"),
+        churned=("Churn", lambda values: values.eq("Yes").sum()),
+    )
+    contract_tenure["churn_rate_pct"] = (
+        contract_tenure["churned"] / contract_tenure["customers"] * 100
+    )
+    contract_tenure = contract_tenure.reindex(
+        pd.MultiIndex.from_product(
+            [CONTRACT_ORDER, TENURE_GROUP_ORDER],
+            names=["Contract", "TenureGroup"],
+        )
+    )
+
+    charges = data.groupby(["Contract", "Churn"], observed=True).agg(
+        customers=("MonthlyCharges", "count"),
+        mean=("MonthlyCharges", "mean"),
+        median=("MonthlyCharges", "median"),
+    )
+    charges = charges.reindex(
+        pd.MultiIndex.from_product(
+            [CONTRACT_ORDER, ["No", "Yes"]], names=["Contract", "Churn"]
+        )
+    )
+
+    service_count = data.groupby("ServiceCount").agg(
+        customers=("Churn", "size"),
+        churned=("Churn", lambda values: values.eq("Yes").sum()),
+    )
+    service_count["churn_rate_pct"] = (
+        service_count["churned"] / service_count["customers"] * 100
+    )
+
+    payment_contract = data.groupby(
+        ["PaymentMethod", "Contract"], observed=True
+    ).agg(
+        customers=("Churn", "size"),
+        churned=("Churn", lambda values: values.eq("Yes").sum()),
+    )
+    payment_contract["churn_rate_pct"] = (
+        payment_contract["churned"] / payment_contract["customers"] * 100
+    )
+    payment_contract = payment_contract.reindex(
+        pd.MultiIndex.from_product(
+            [PAYMENT_ORDER, CONTRACT_ORDER],
+            names=["PaymentMethod", "Contract"],
+        )
+    )
+
+    print("\n========== DAY 7: CONTRACT + TENURE GROUP ==========")
+    print(contract_tenure.round(2).to_string())
+    print("\n========== MONTHLY CHARGES + CONTRACT + CHURN ==========")
+    print(charges.round(2).to_string())
+    print("\n========== SERVICE COUNT + CHURN ==========")
+    print(service_count.round(2).to_string())
+    print("\n========== PAYMENT METHOD + CONTRACT + CHURN ==========")
+    print(payment_contract.round(2).to_string())
+
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+
+    contract_rates = contract_tenure["churn_rate_pct"].unstack("TenureGroup")
+    contract_rates = contract_rates.reindex(
+        index=CONTRACT_ORDER, columns=TENURE_GROUP_ORDER
+    )
+    image = axes[0, 0].imshow(contract_rates, cmap="YlOrRd", vmin=0, vmax=60, aspect="auto")
+    axes[0, 0].set_title("Churn rate by contract and tenure group")
+    axes[0, 0].set_xticks(range(len(TENURE_GROUP_ORDER)), TENURE_GROUP_ORDER, rotation=25, ha="right")
+    axes[0, 0].set_yticks(range(len(CONTRACT_ORDER)), CONTRACT_ORDER)
+    for row in range(contract_rates.shape[0]):
+        for col in range(contract_rates.shape[1]):
+            axes[0, 0].text(col, row, f"{contract_rates.iloc[row, col]:.1f}%", ha="center", va="center")
+    fig.colorbar(image, ax=axes[0, 0], label="Churn rate (%)")
+
+    charge_means = charges["mean"].unstack("Churn").reindex(
+        index=CONTRACT_ORDER, columns=["No", "Yes"]
+    )
+    charge_means.columns = ["Stayed", "Churned"]
+    charge_means.plot(kind="bar", ax=axes[0, 1], color=["#3977a8", "#d47748"])
+    axes[0, 1].set_title("Average monthly charges by contract and churn")
+    axes[0, 1].set_xlabel("")
+    axes[0, 1].set_ylabel("Monthly charges")
+    axes[0, 1].tick_params(axis="x", rotation=0)
+    axes[0, 1].legend(title="Customer status")
+
+    axes[1, 0].plot(
+        service_count.index,
+        service_count["churn_rate_pct"],
+        marker="o",
+        color="#3977a8",
+    )
+    axes[1, 0].set_title("Churn rate by number of selected services")
+    axes[1, 0].set_xlabel("Service count (0–6)")
+    axes[1, 0].set_ylabel("Churn rate (%)")
+    axes[1, 0].set_xticks(service_count.index)
+    axes[1, 0].set_ylim(0, 55)
+    axes[1, 0].grid(axis="y", alpha=0.25)
+
+    payment_rates = payment_contract["churn_rate_pct"].unstack("Contract")
+    payment_rates = payment_rates.reindex(index=PAYMENT_ORDER, columns=CONTRACT_ORDER)
+    image = axes[1, 1].imshow(payment_rates, cmap="YlOrRd", vmin=0, vmax=60, aspect="auto")
+    axes[1, 1].set_title("Churn rate by payment method and contract")
+    axes[1, 1].set_xticks(range(len(CONTRACT_ORDER)), CONTRACT_ORDER, rotation=20, ha="right")
+    axes[1, 1].set_yticks(range(len(PAYMENT_ORDER)), PAYMENT_ORDER)
+    for row in range(payment_rates.shape[0]):
+        for col in range(payment_rates.shape[1]):
+            axes[1, 1].text(col, row, f"{payment_rates.iloc[row, col]:.1f}%", ha="center", va="center")
+    fig.colorbar(image, ax=axes[1, 1], label="Churn rate (%)")
+
+    fig.suptitle("Day 7 — Combined churn relationships")
+    fig.tight_layout()
+    chart_path = Path(__file__).resolve().parent / "Day7_Relationship_Analysis.png"
+    fig.savefig(chart_path, dpi=160, bbox_inches="tight")
+    plt.close(fig)
+    print(f"\nRelationship chart saved to: {chart_path.name}")
+
+
 run_day6_eda_ii(df)
+run_day7_relationship_analysis(df)
